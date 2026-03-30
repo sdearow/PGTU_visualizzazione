@@ -287,6 +287,7 @@
     <script src="data/LineeATAC_4.js"></script>
     <script src="data/grafo2026_data.js"></script>
     <script src="data/proposte2026_data.js"></script>
+    <script src="data/extraurbane_altri_data.js"></script>
     <script src="data_strade_provinciali.js"></script>
     <script src="data_extraurbane.js"></script>
     <script src="data_centri_abitati.js"></script>
@@ -688,33 +689,36 @@
         function ensureExtraurbaneAltriLayer() {
             if (extraurbaneAltriLoaded) return; extraurbaneAltriLoaded = true;
             layerExtraurbaneAltri.clearLayers();
-            if (typeof json_StradeProvinciali !== 'undefined') {
-                var filtered = filterStradeInsideMunicipi(json_StradeProvinciali);
-                layerExtraurbaneAltri.addLayer(L.geoJSON(filtered, {
-                    style: function() { return { color: '#555555', weight: 2.5, opacity: 0.7, lineCap: 'round', lineJoin: 'round' }; },
-                    onEachFeature: function(feature, layer) {
-                        var p = feature.properties;
-                        var html = '<table class="popup-table">';
-                        html += '<tr><th colspan="2" style="font-size:13px;padding:6px 8px;background:#555555;color:white;">Strada Provinciale</th></tr>';
-                        if (p.name) html += popupRow('Nome', p.name);
-                        if (p.codice) html += popupRow('Codice', p.codice);
-                        html += '</table>';
-                        layer.bindPopup(html, { maxWidth: 340 });
-                    }
-                }));
-            }
-            // Add Autostrade (A) from Annesso D
-            if (typeof json_PGTUAnnessoD_5 !== 'undefined') {
-                (json_PGTUAnnessoD_5.features || []).forEach(function(f) {
-                    if ((f.properties.Classifica || '').toUpperCase() !== 'A') return;
-                    var gl = L.geoJSON(f.geometry, {
-                        style: function() { return { color: '#555555', weight: 3.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }; }
-                    });
-                    var name = f.properties.Toponomast || f.properties.Nome || 'Arco senza nome';
-                    gl.bindPopup('<div class="popup-title">' + name + '</div><span class="popup-layer-badge" style="background:#555;">Autostrada (da Annesso D)</span>', { maxWidth: 380 });
-                    layerExtraurbaneAltri.addLayer(gl);
+            if (typeof extraurbaneAltriData === 'undefined') return;
+            (extraurbaneAltriData.features || []).forEach(function(f) {
+                if (!f.geometry) return;
+                var p = f.properties;
+                var fonte = p.fonte || '';
+                var isAutostrada = fonte.indexOf('Autostrada') >= 0;
+                var isProvinciale = fonte === 'Strada Provinciale';
+                var weight = isAutostrada ? 3.5 : (isProvinciale ? 2.5 : 3);
+                var opacity = isAutostrada ? 0.9 : (isProvinciale ? 0.7 : 0.8);
+                var gl = L.geoJSON(f.geometry, {
+                    style: function() { return { color: '#555555', weight: weight, opacity: opacity, lineCap: 'round', lineJoin: 'round' }; }
                 });
-            }
+                var name = p.Toponomast || p.Nome || p.name || 'Arco senza nome';
+                var badgeLabel = isAutostrada ? 'Autostrada' : (isProvinciale ? 'Strada Provinciale' : 'Extraurbana Altri Enti');
+                var html = '<div class="popup-title">' + name + '</div>';
+                html += '<span class="popup-layer-badge" style="background:#555555;">' + badgeLabel + '</span>';
+                html += '<table class="popup-table">';
+                html += '<tr><th colspan="2" style="font-size:13px;padding:6px 8px;background:#555555;color:white;">' + badgeLabel + '</th></tr>';
+                if (p.Classifica) html += popupRow('Classificazione', p.Classifica);
+                if (p.codice) html += popupRow('Codice', p.codice);
+                if (p.Limiti && p.Limiti !== '-') html += popupRow('Limiti', p.Limiti);
+                if (p.Municipio && p.Municipio !== '-') html += popupRow('Municipio', p.Municipio);
+                if (p.Grande_Via && p.Grande_Via !== 'No') html += popupRow('Grande Viabilità', p.Grande_Via);
+                if (p.TPL && p.TPL !== 'No') html += popupRow('TPL', p.TPL);
+                if (p.Note_2025 && p.Note_2025 !== '-') html += popupRow('Note', p.Note_2025);
+                html += popupRow('Fonte', fonte);
+                html += '</table>';
+                gl.bindPopup(html, { maxWidth: 380 });
+                layerExtraurbaneAltri.addLayer(gl);
+            });
         }
 
         // --- Extraurbane Comune di Roma (read-only from data_extraurbane.js) ---

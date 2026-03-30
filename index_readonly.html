@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="origin">
+    <title>PGTU Roma 2026 - Visualizzazione</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        body { display: flex; flex-direction: column; }
+
+        #map-container { width: 100%; height: 100%; position: relative; }
+        #map { width: 100%; height: 100%; }
+
+        /* Control panel */
+        .control-panel {
+            position: absolute; top: 10px; right: 10px; z-index: 1000;
+            background: white; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+            padding: 16px; max-width: 320px; min-width: 260px;
+            max-height: calc(100vh - 30px); overflow-y: auto;
+        }
+        .control-panel h2 { font-size: 15px; margin-bottom: 12px; color: #333; border-bottom: 2px solid #0079ff; padding-bottom: 6px; }
+        .control-section { margin-bottom: 14px; }
+        .control-section h3 { font-size: 12px; text-transform: uppercase; color: #666; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .layer-toggle { display: flex; align-items: center; padding: 5px 0; cursor: pointer; }
+        .layer-toggle input[type="checkbox"] { margin-right: 8px; width: 16px; height: 16px; cursor: pointer; }
+        .layer-toggle label { font-size: 13px; color: #333; cursor: pointer; flex: 1; }
+
+        /* Municipi selector */
+        #municipio-select {
+            width: 100%; padding: 6px 8px; font-size: 13px;
+            border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer;
+        }
+        #municipio-select:focus { outline: none; border-color: #0079ff; box-shadow: 0 0 0 2px rgba(0,121,255,0.2); }
+
+        /* Search box */
+        .search-container { position: relative; }
+        #road-search {
+            width: 100%; padding: 6px 8px; font-size: 13px;
+            border: 1px solid #ccc; border-radius: 4px; background: white;
+        }
+        #road-search:focus { outline: none; border-color: #0079ff; box-shadow: 0 0 0 2px rgba(0,121,255,0.2); }
+        #search-results {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: white; border: 1px solid #ccc; border-top: none;
+            border-radius: 0 0 4px 4px; max-height: 250px; overflow-y: auto;
+            z-index: 1001; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .search-result-item { padding: 6px 8px; font-size: 12px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .search-result-item:hover { background: #e8f0fe; }
+        .search-result-item .result-type { font-size: 10px; color: #888; margin-left: 4px; }
+        .search-separator {
+            padding: 4px 8px; font-size: 10px; color: #999; text-transform: uppercase;
+            letter-spacing: 0.5px; background: #f5f5f5; border-bottom: 1px solid #eee; cursor: default;
+        }
+        .search-result-item .result-source { font-size: 10px; color: #0079ff; margin-left: 4px; }
+
+        /* Legend */
+        .legend-item { display: flex; align-items: center; padding: 2px 0; font-size: 12px; color: #555; }
+        .legend-line { width: 24px; height: 3px; margin-right: 6px; border-radius: 1px; flex-shrink: 0; }
+        .legend-line-dashed { width: 24px; height: 0; margin-right: 6px; border-top: 3px dashed; flex-shrink: 0; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+        .legend-block { margin-top: 4px; padding-left: 4px; }
+
+        /* Popups */
+        .leaflet-popup-content { font-size: 13px; line-height: 1.6; max-width: 320px; }
+        .leaflet-popup-content strong { color: #333; }
+        .popup-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        .popup-table th { text-align: left; color: #555; font-weight: 600; padding: 2px 8px 2px 0; font-size: 12px; white-space: nowrap; }
+        .popup-table td { padding: 2px 0; font-size: 12px; color: #333; }
+        .popup-title { font-size: 14px; font-weight: 700; color: #222; margin-bottom: 4px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+        .popup-layer-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; color: white; margin-bottom: 4px; }
+        .popup-notes {
+            margin-top: 6px; padding: 6px 8px; background: #fffde7;
+            border-left: 3px solid #ffc107; border-radius: 2px; font-size: 12px; color: #333; white-space: pre-wrap;
+        }
+
+        /* Measure tool */
+        .leaflet-measure-control {
+            background: white; border-radius: 4px; box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            padding: 6px 10px; cursor: pointer; font-size: 16px; line-height: 1; border: 2px solid rgba(0,0,0,0.2);
+        }
+        .leaflet-measure-control:hover { background: #f0f0f0; }
+        .leaflet-measure-control.active { background: #0079ff; color: white; border-color: #005fc4; }
+        .measure-tooltip { background: rgba(0,0,0,0.75); color: white; padding: 3px 8px; border-radius: 3px; font-size: 12px; white-space: nowrap; }
+
+        /* Loading overlay */
+        #loading {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.92); z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #loading .spinner { width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: #0079ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading p { color: #555; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Caricamento dati mappa...</p>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+
+        <div class="control-panel">
+            <h2>PGTU Roma 2026</h2>
+
+            <!-- Road search -->
+            <div class="control-section">
+                <h3>Cerca Strada</h3>
+                <div class="search-container">
+                    <input type="text" id="road-search" placeholder="Digita il nome della strada...">
+                    <div id="search-results"></div>
+                </div>
+            </div>
+
+            <!-- Municipi selector -->
+            <div class="control-section">
+                <h3>Municipi</h3>
+                <select id="municipio-select">
+                    <option value="">Tutti i Municipi</option>
+                </select>
+            </div>
+
+            <!-- Rete Stradale Principale -->
+            <div class="control-section">
+                <h3>Rete Stradale Principale</h3>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-pgtu-black">
+                    <label for="toggle-pgtu-black">PGTU - Annesso D (Nero)</label>
+                </div>
+                <div class="legend-block" id="legend-pgtu-black" style="display:none;">
+                    <div class="legend-item"><span class="legend-line" style="background:#000"></span> Tutti gli archi (nero)</div>
+                </div>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-pgtu" checked>
+                    <label for="toggle-pgtu">PGTU - Annesso D</label>
+                </div>
+                <div class="legend-block" id="legend-pgtu">
+                    <div class="legend-item"><span class="legend-line" style="background:#000"></span> Autostrade (A)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#007bff"></span> Scorrimento (S)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#27f1ff"></span> Interquartiere (IQ)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#ff9400"></span> Quartiere (Q)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#e4ff00"></span> Interzonali (IZ)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#8B4513"></span> Extraurbana (EX)</div>
+                </div>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-extraurbane-altri">
+                    <label for="toggle-extraurbane-altri">Strade Extraurbane Altri Enti</label>
+                </div>
+                <div class="legend-block" id="legend-extraurbane-altri" style="display:none;">
+                    <div class="legend-item"><span class="legend-line" style="background:#555555"></span> Strade Provinciali + Extraurbane non CdR</div>
+                </div>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-extraurbane-cdr">
+                    <label for="toggle-extraurbane-cdr">Strade Extraurbane Comune di Roma</label>
+                </div>
+                <div class="legend-block" id="legend-extraurbane-cdr" style="display:none;">
+                    <div class="legend-item"><span class="legend-line" style="background:#8B4513"></span> Extraurbane Comune di Roma</div>
+                </div>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-centri-abitati">
+                    <label for="toggle-centri-abitati">Centri Abitati</label>
+                </div>
+                <div class="layer-toggle" style="margin-top:6px;border-top:1px solid #eee;padding-top:6px;">
+                    <input type="checkbox" id="toggle-grafo2026">
+                    <label for="toggle-grafo2026" style="font-weight:700;">PGTU - Grafo 2026</label>
+                </div>
+                <div class="legend-block" id="legend-grafo2026" style="display:none;">
+                    <div class="legend-item"><span class="legend-line" style="background:#007bff"></span> Scorrimento (S)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#27f1ff"></span> Interquartiere (IQ)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#ff9400"></span> Quartiere (Q)</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#e4ff00"></span> Interzonali (IZ)</div>
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#006400"></span> Aggiunte</div>
+                </div>
+                <div class="layer-toggle" style="margin-top:4px;">
+                    <input type="checkbox" id="toggle-piazze-larghi" checked>
+                    <label for="toggle-piazze-larghi">Piazze, Larghi ecc. (Proposte)</label>
+                </div>
+            </div>
+
+            <!-- Flussi di Traffico -->
+            <div class="control-section">
+                <h3>Analisi Flussi di Traffico</h3>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-low-traffic" checked>
+                    <label for="toggle-low-traffic">Flussi Bassi (Rete Principale)</label>
+                </div>
+                <div class="legend-block" id="legend-low">
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(0,138,10)"></span> 100 - 2,200</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(64,167,72)"></span> 2,200 - 4,160</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(128,197,133)"></span> 4,160 - 6,810</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(191,226,194)"></span> 6,810 - 15,640</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(220,220,220)"></span> 15,640 - 57,830</div>
+                </div>
+                <div class="layer-toggle" style="margin-top: 8px;">
+                    <input type="checkbox" id="toggle-high-traffic" checked>
+                    <label for="toggle-high-traffic">Flussi Elevati (Fuori Rete)</label>
+                </div>
+                <div class="legend-block" id="legend-high">
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(255,90,90)"></span> 5,000 - 5,820</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(239,78,77)"></span> 5,820 - 6,840</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(222,65,64)"></span> 6,840 - 7,780</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(206,52,52)"></span> 7,780 - 8,970</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(189,40,39)"></span> 8,970 - 10,980</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(173,27,26)"></span> 10,980 - 14,490</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(156,15,13)"></span> 14,490 - 22,270</div>
+                    <div class="legend-item"><span class="legend-line" style="background:rgb(140,2,0)"></span> 22,270 - 77,500</div>
+                </div>
+            </div>
+
+            <!-- Trasporto Pubblico -->
+            <div class="control-section">
+                <h3>Trasporto Pubblico</h3>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-atac">
+                    <label for="toggle-atac">Linee ATAC</label>
+                </div>
+                <div class="legend-block" id="legend-atac" style="display:none">
+                    <div class="legend-item"><span class="legend-line" style="background:#8b1a1a"></span> Linee bus/tram ATAC</div>
+                </div>
+                <div class="layer-toggle" style="margin-top:4px;">
+                    <input type="checkbox" id="toggle-tpl3">
+                    <label for="toggle-tpl3">Rete TPL (3+ linee)</label>
+                </div>
+                <div class="legend-block" id="legend-tpl3" style="display:none">
+                    <div class="legend-item"><span class="legend-line" style="background:#fdd835"></span> 3-4 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#ff9800"></span> 5-6 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#f44336"></span> 7-9 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#9c27b0"></span> 10-14 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#1a237e"></span> 15+ linee</div>
+                </div>
+                <div class="layer-toggle" style="margin-top:4px;">
+                    <input type="checkbox" id="toggle-tpl5">
+                    <label for="toggle-tpl5">Rete TPL (5+ linee)</label>
+                </div>
+                <div class="legend-block" id="legend-tpl5" style="display:none">
+                    <div class="legend-item"><span class="legend-line" style="background:#ff9800"></span> 5-6 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#f44336"></span> 7-9 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#9c27b0"></span> 10-14 linee</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#1a237e"></span> 15+ linee</div>
+                </div>
+            </div>
+
+            <!-- Proposte di Modifica (sola lettura) -->
+            <div class="control-section">
+                <h3>Proposte di Modifica</h3>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-proposte-elim" checked>
+                    <label for="toggle-proposte-elim">Eliminazioni</label>
+                </div>
+                <div class="legend-block" id="legend-proposte-elim">
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#e74c3c"></span> Eliminazioni (da rete)</div>
+                    <div class="legend-item"><span class="legend-dot" style="background:#e74c3c"></span> Punto Eliminazione</div>
+                </div>
+                <div class="layer-toggle">
+                    <input type="checkbox" id="toggle-proposte-ins" checked>
+                    <label for="toggle-proposte-ins">Aggiunte</label>
+                </div>
+                <div class="legend-block" id="legend-proposte-ins">
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#007bff"></span> Scorrimento (S)</div>
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#27f1ff"></span> Interquartiere (IQ)</div>
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#ff9400"></span> Quartiere (Q)</div>
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#e4ff00"></span> Interzonali (IZ)</div>
+                    <div class="legend-item"><span class="legend-line-dashed" style="border-color:#8B4513"></span> Extraurbana (EX)</div>
+                    <div class="legend-item"><span class="legend-dot" style="background:#006400"></span> Punto Inserimento</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Turf.js for spatial operations -->
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+    <!-- GeoJSON data files -->
+    <script src="Mappe Proposte_130224/Tabella 1/Mappa/layers/Municipi_1.js"></script>
+    <script src="Mappe Proposte_130224/Tabella 1/Mappa/layers/PGTUAnnessoD_5.js"></script>
+    <script src="Mappe Proposte_130224/Tabella 1/Mappa/layers/FlussiTomTomflussi_tomtom_3.js"></script>
+    <script src="Mappe Proposte_130224/Tabella 2/Mappa/layers/FlussiTomTomflussi_tomtom_2.js"></script>
+    <script src="Mappe Proposte_130224/Tabella 1/Mappa/layers/LineeATAC_4.js"></script>
+    <script src="data_strade_provinciali.js"></script>
+    <script src="data_extraurbane.js"></script>
+    <script src="data_centri_abitati.js"></script>
+    <script src="data_rete_tpl_3.js"></script>
+    <script src="data_rete_tpl_5.js"></script>
+
+    <script>
+    (function() {
+        // =====================================================
+        // COLORS & CONSTANTS
+        // =====================================================
+        var COLOR_ELIM = '#e74c3c';
+        var COLOR_INS = '#006400';
+        var classificaColors = {
+            'A': '#000000', 'S': '#007bff', 'IQ': '#27f1ff',
+            'Q': '#ff9400', 'IZ': '#e4ff00', 'EX': '#8B4513'
+        };
+        var classificaNames = {
+            'A': 'Autostrade', 'S': 'Scorrimento', 'IQ': 'Interquartiere',
+            'Q': 'Quartiere', 'IZ': 'Interzonali', 'EX': 'Extraurbana'
+        };
+
+        // =====================================================
+        // MAP INITIALIZATION
+        // =====================================================
+        var map = L.map('map', {
+            center: [41.9028, 12.4964], zoom: 11,
+            zoomControl: true, zoomSnap: 1, zoomDelta: 1, wheelDebounceTime: 80
+        });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(map);
+        map.getPane('tilePane').style.filter = 'grayscale(1)';
+
+        map.createPane('backgroundPane');
+        map.getPane('backgroundPane').style.zIndex = 250;
+        map.createPane('maskPane');
+        map.getPane('maskPane').style.zIndex = 201;
+        map.createPane('highlightPane');
+        map.getPane('highlightPane').style.zIndex = 450;
+
+        var bwMaskLayer = null;
+
+        // =====================================================
+        // STYLE FUNCTIONS
+        // =====================================================
+        function stylePGTU(feature) {
+            var cl = feature.properties.Classifica || feature.properties.classifica || '';
+            return { color: classificaColors[cl] || '#888888', weight: 2.5, opacity: 1, lineCap: 'square', lineJoin: 'bevel' };
+        }
+        function styleLowTraffic(feature) {
+            var v = parseFloat(feature.properties['Flussi Gio']) || 0;
+            var c;
+            if (v <= 2200) c = 'rgb(0,138,10)';
+            else if (v <= 4159) c = 'rgb(64,167,72)';
+            else if (v <= 6814) c = 'rgb(128,197,133)';
+            else if (v <= 15638) c = 'rgb(191,226,194)';
+            else c = 'rgb(220,220,220)';
+            return { color: c, weight: 5, opacity: 0.85, lineCap: 'square', lineJoin: 'bevel' };
+        }
+        function styleHighTraffic(feature) {
+            var v = parseFloat(feature.properties['Flussi Giornalieri']) || 0;
+            var c;
+            if (v <= 5822) c = 'rgb(255,90,90)';
+            else if (v <= 6837) c = 'rgb(239,78,77)';
+            else if (v <= 7784) c = 'rgb(222,65,64)';
+            else if (v <= 8970) c = 'rgb(206,52,52)';
+            else if (v <= 10982) c = 'rgb(189,40,39)';
+            else if (v <= 14485) c = 'rgb(173,27,26)';
+            else if (v <= 22268) c = 'rgb(156,15,13)';
+            else c = 'rgb(140,2,0)';
+            return { color: c, weight: 4, opacity: 0.85, lineCap: 'square', lineJoin: 'bevel' };
+        }
+
+        var defaultMunicipiStyle = { color: 'rgba(0,0,0,0.35)', weight: 2, fillColor: 'rgba(0,121,255,0.15)', fillOpacity: 0.15 };
+        var highlightMunicipiStyle = { color: '#003d80', weight: 5, fillColor: '#0079ff', fillOpacity: 0.18 };
+        var dimmedMunicipiStyle = { color: 'rgba(0,0,0,0.15)', weight: 1, fillColor: 'rgba(180,180,180,0.08)', fillOpacity: 0.08 };
+
+        // =====================================================
+        // POPUP HELPERS (read-only, no edit/delete buttons)
+        // =====================================================
+        function fmt(val) {
+            if (val === null || val === undefined || val === '' || val === 'None' || val === 'null') return null;
+            return val;
+        }
+        function fmtNum(val) {
+            var n = parseFloat(val);
+            if (isNaN(n)) return null;
+            return Math.round(n).toLocaleString('it-IT');
+        }
+        function popupRow(label, value) {
+            if (value === null || value === undefined) return '';
+            return '<tr><th>' + label + '</th><td>' + value + '</td></tr>';
+        }
+
+        function popupPGTU(feature, layer) {
+            var p = feature.properties;
+            var name = fmt(p.Toponomast) || fmt(p.Nome) || 'N/D';
+            var html = '<div class="popup-title">' + name + '</div>';
+            html += '<span class="popup-layer-badge" style="background:#2c3e50;">Rete Stradale PGTU</span>';
+            html += '<table class="popup-table">';
+            html += popupRow('Classificazione', classificaNames[p.Classifica] ? classificaNames[p.Classifica] + ' (' + p.Classifica + ')' : fmt(p.Classifica));
+            html += popupRow('Limiti', fmt(p.Limiti));
+            html += popupRow('Cod. Progressivo', fmt(p.Cod_prog));
+            html += popupRow('Municipio', fmt(p.Municipio));
+            html += popupRow('Grande Viabilit&agrave;', fmt(p.Grande_Via));
+            html += popupRow('TPL', fmt(p.TPL));
+            if (p.Note_2025 && p.Note_2025 !== '-') html += popupRow('Note 2025', p.Note_2025);
+            html += '</table>';
+            layer.bindPopup(html, { maxWidth: 340 });
+        }
+        function popupLowTraffic(feature, layer) {
+            var p = feature.properties;
+            var name = fmt(p['Nome Strad']) || fmt(p.Toponom) || fmt(p.Toponomast) || 'N/D';
+            var html = '<div class="popup-title">' + name + '</div>';
+            html += '<span class="popup-layer-badge" style="background:rgb(0,138,10);">Flussi Bassi (Tab. 1)</span>';
+            html += '<table class="popup-table">';
+            if (p.Toponomast && p.Toponomast !== name) html += popupRow('Toponomastica', p.Toponomast);
+            html += popupRow('Flussi Giornalieri', fmtNum(p['Flussi Gio']));
+            html += popupRow('Flusso Medio', fmtNum(p['Flusso Med']));
+            html += popupRow('Classificazione', fmt(p.CF));
+            html += popupRow('Municipio', fmt(p.Municipio));
+            html += '</table>';
+            layer.bindPopup(html, { maxWidth: 340 });
+        }
+        function popupHighTraffic(feature, layer) {
+            var p = feature.properties;
+            var name = fmt(p['Nome Strada']) || fmt(p.Toponomastica) || fmt(p.Toponom) || 'N/D';
+            var html = '<div class="popup-title">' + name + '</div>';
+            html += '<span class="popup-layer-badge" style="background:rgb(140,2,0);">Flussi Elevati (Tab. 2)</span>';
+            html += '<table class="popup-table">';
+            if (p.Toponomastica && p.Toponomastica !== name) html += popupRow('Toponomastica', p.Toponomastica);
+            html += popupRow('Flussi Giornalieri', fmtNum(p['Flussi Giornalieri']));
+            html += popupRow('Flusso Medio', fmtNum(p['Flusso Medio']));
+            html += popupRow('Classificazione', fmt(p.CF));
+            html += popupRow('Municipio', fmt(p.Municipio));
+            html += '</table>';
+            layer.bindPopup(html, { maxWidth: 340 });
+        }
+
+        // =====================================================
+        // MUNICIPI LAYER + BOUNDARY
+        // =====================================================
+        var layerMunicipii = L.geoJSON(json_Municipi_1, { style: defaultMunicipiStyle }).addTo(map);
+        var mergedMunicipiBoundary = null;
+        var municipiPolygons = [];
+        (function() {
+            try {
+                var merged = null;
+                layerMunicipii.eachLayer(function(layer) {
+                    var geojson = layer.toGeoJSON();
+                    municipiPolygons.push(geojson);
+                    if (!merged) merged = geojson;
+                    else merged = turf.union(turf.featureCollection([merged, geojson]));
+                });
+                if (merged) {
+                    mergedMunicipiBoundary = merged;
+                    L.geoJSON(merged, {
+                        style: { color: '#1a1a1a', weight: 4, opacity: 0.9, fillOpacity: 0, dashArray: null },
+                        interactive: false
+                    }).addTo(map);
+                }
+            } catch(e) { console.warn('Outer Municipi border merge failed:', e); }
+        })();
+
+        // =====================================================
+        // STATIC LAYERS (created immediately)
+        // =====================================================
+        var layerLowTraffic = L.geoJSON(json_FlussiTomTomflussi_tomtom_3, {
+            style: styleLowTraffic, onEachFeature: popupLowTraffic
+        }).addTo(map);
+
+        var layerHighTraffic = L.geoJSON(json_FlussiTomTomflussi_tomtom_2, {
+            style: styleHighTraffic, onEachFeature: popupHighTraffic
+        }).addTo(map);
+
+        var layerPGTU = L.geoJSON(json_PGTUAnnessoD_5, {
+            style: stylePGTU, onEachFeature: popupPGTU
+        }).addTo(map);
+
+        var layerPGTUBlack = L.geoJSON(json_PGTUAnnessoD_5, {
+            style: function() { return { color: '#000000', weight: 2.5, opacity: 1, lineCap: 'square', lineJoin: 'bevel' }; },
+            onEachFeature: popupPGTU
+        });
+
+        // Fit map to data bounds
+        try { map.fitBounds(layerMunicipii.getBounds(), { padding: [20, 20] }); } catch(e) {}
+
+        // Layer groups for proposte and grafo (will be populated by fetch)
+        var manualElimGroup = L.layerGroup().addTo(map);
+        var manualInsGroup = L.layerGroup().addTo(map);
+        var layerGrafo2026 = L.layerGroup();
+        var layerPiazzeLarghi = L.layerGroup().addTo(map);
+        var piazzaLarghiRe = /^(piazza|piazzale|piazzetta|largo|larghi|rotonda|rotatoria)\b/i;
+
+        // =====================================================
+        // FETCH & RENDER: Grafo 2026 + Proposte (from static geojson)
+        // =====================================================
+        var grafo2026Data = null;
+        var proposteData = null;
+
+        function renderGrafo2026(geojson) {
+            layerGrafo2026.clearLayers();
+            (geojson.features || []).forEach(function(f) {
+                if (!f.geometry) return;
+                var p = f.properties;
+                var isProposta = (p.fonte === 'Proposta Inserimento');
+                var color = classificaColors[p.classifica] || (isProposta ? '#006400' : '#888888');
+                var geoLayer = L.geoJSON(f, {
+                    style: function() {
+                        var s = { color: color, weight: 3, opacity: 1, lineCap: isProposta ? 'butt' : 'square', lineJoin: 'bevel' };
+                        if (isProposta) s.dashArray = '8,5';
+                        return s;
+                    }
+                });
+                geoLayer.eachLayer(function(layer) {
+                    var cfName = classificaNames[p.classifica] || p.classifica || 'N/D';
+                    var html = '<div class="popup-title">' + (p.nome || 'Arco senza nome') + '</div>';
+                    html += '<span class="popup-layer-badge" style="background:#2c3e50;">Grafo 2026</span>';
+                    html += '<table class="popup-table">';
+                    html += popupRow('Classificazione', cfName + (p.classifica ? ' (' + p.classifica + ')' : ''));
+                    html += popupRow('Limiti', fmt(p.limiti));
+                    html += popupRow('Municipio', fmt(p.municipio));
+                    html += popupRow('Cod. Progressivo', fmt(p.cod_prog));
+                    html += popupRow('Grande Viabilit&agrave;', fmt(p.grande_viabilita));
+                    html += popupRow('TPL', fmt(p.tpl));
+                    html += popupRow('Fonte', fmt(p.fonte));
+                    if (p.note && p.note !== '-') html += popupRow('Note', p.note);
+                    html += '</table>';
+                    layer.bindPopup(html, { maxWidth: 340 });
+                });
+                layerGrafo2026.addLayer(geoLayer);
+            });
+        }
+
+        function renderProposte(geojson) {
+            manualElimGroup.clearLayers();
+            manualInsGroup.clearLayers();
+            layerPiazzeLarghi.clearLayers();
+            (geojson.features || []).forEach(function(f) {
+                var p = f.properties;
+                var isElim = p.tipo === 'eliminazione';
+                var typeColor = isElim ? COLOR_ELIM : COLOR_INS;
+                var group = isElim ? manualElimGroup : manualInsGroup;
+                var lineColor = (p.classificazione && classificaColors[p.classificazione])
+                    ? classificaColors[p.classificazione] : typeColor;
+
+                // Build read-only popup
+                var label = isElim ? 'Proposta Eliminazione' : 'Proposta Inserimento';
+                var html = '<div class="popup-title">' + (p.nome || 'Proposta') + '</div>';
+                html += '<span class="popup-layer-badge" style="background:' + typeColor + ';">' + label + '</span>';
+                html += '<table class="popup-table">';
+                if (p.fonte) html += popupRow('Fonte', p.fonte);
+                if (p.classificazione) {
+                    var cfName = classificaNames[p.classificazione] || p.classificazione;
+                    html += popupRow('Classificazione', cfName + ' (' + p.classificazione + ')');
+                }
+                if (p.lunghezza_km) html += popupRow('Lunghezza', parseFloat(p.lunghezza_km).toFixed(2) + ' km');
+                if (p.flussi) html += popupRow('Flussi Giornalieri', p.flussi);
+                if (p.municipio) html += popupRow('Municipio', p.municipio);
+                html += '</table>';
+                if (p.note) {
+                    html += '<div class="popup-notes">' + String(p.note).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+                }
+
+                // Check if this is a Piazza/Largo inserimento
+                var isPiazza = !isElim && p.nome && piazzaLarghiRe.test(p.nome);
+
+                if (f.geometry && f.geometry.type === 'Point') {
+                    var latlng = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+                    var marker = L.circleMarker(latlng, {
+                        radius: 9, color: typeColor, fillColor: typeColor,
+                        fillOpacity: 0.7, weight: 3, opacity: 1
+                    });
+                    marker.bindPopup(html, { maxWidth: 340 });
+                    if (isPiazza) layerPiazzeLarghi.addLayer(marker);
+                    else group.addLayer(marker);
+                } else if (f.geometry) {
+                    var geoLayer = L.geoJSON(f.geometry, {
+                        style: function() {
+                            return { color: lineColor, weight: 3, opacity: 0.9, dashArray: '8,6', lineCap: 'butt', lineJoin: 'bevel' };
+                        }
+                    });
+                    geoLayer.eachLayer(function(layer) {
+                        layer.bindPopup(html, { maxWidth: 340 });
+                    });
+                    if (isPiazza) layerPiazzeLarghi.addLayer(geoLayer);
+                    else group.addLayer(geoLayer);
+                }
+            });
+        }
+
+        // Fetch both geojson files
+        Promise.all([
+            fetch('PGTU_Grafo_2026.geojson').then(function(r) { return r.json(); }),
+            fetch('pgtu_proposte_2026-03-26.geojson').then(function(r) { return r.json(); })
+        ]).then(function(results) {
+            grafo2026Data = results[0];
+            proposteData = results[1];
+            renderGrafo2026(grafo2026Data);
+            renderProposte(proposteData);
+            // Build search index after data loaded (defined in Step 5)
+            if (typeof buildSearchIndex === 'function') buildSearchIndex();
+            document.getElementById('loading').style.display = 'none';
+        }).catch(function(err) {
+            console.error('Errore caricamento dati:', err);
+            document.getElementById('loading').innerHTML = '<p style="color:#c00;font-size:14px;">Errore nel caricamento dei dati GeoJSON.</p>';
+        })
+        // =====================================================
+        // LAZY LAYERS (loaded on demand)
+        // =====================================================
+
+        // --- ATAC ---
+        var layerATAC = null;
+        var atacLoaded = false;
+        function ensureATACLayer() {
+            if (atacLoaded) return;
+            atacLoaded = true;
+            if (typeof json_LineeATAC_4 !== 'undefined') {
+                layerATAC = L.geoJSON(json_LineeATAC_4, {
+                    style: function() { return { color: '#8b1a1a', weight: 1.5, opacity: 0.7, lineCap: 'round', lineJoin: 'round' }; },
+                    onEachFeature: function(feature, layer) {
+                        var p = feature.properties;
+                        var sigla = p.SiglaL_Ute || p.SiglaUtent || '';
+                        var html = '<div class="popup-title">Linea ' + sigla + '</div>';
+                        html += '<span class="popup-layer-badge" style="background:#8b1a1a;">ATAC</span>';
+                        html += '<table class="popup-table">';
+                        if (p.NomeEsteso) html += popupRow('Nome', p.NomeEsteso);
+                        if (p.Lunghezza) html += popupRow('Lunghezza', Math.round(p.Lunghezza) + ' m');
+                        html += popupRow('Attivo', p.Attivo === 'TRUE' ? 'S&igrave;' : 'No');
+                        html += '</table>';
+                        layer.bindPopup(html, { maxWidth: 340 });
+                    }
+                });
+            }
+        }
+
+        // --- TPL ---
+        var tplBandColors = { '3-4': '#fdd835', '5-6': '#ff9800', '7-9': '#f44336', '10-14': '#9c27b0', '15+': '#1a237e' };
+        var layerTPL3 = null, tpl3Loaded = false;
+        function ensureTPL3Layer() {
+            if (tpl3Loaded) return; tpl3Loaded = true;
+            if (typeof dataReteTPL3 !== 'undefined') {
+                layerTPL3 = L.geoJSON(dataReteTPL3, {
+                    style: function(f) { return { color: tplBandColors[f.properties.fascia] || '#ff9800', weight: 3.5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }; },
+                    onEachFeature: function(f, layer) { layer.bindPopup('<strong>Rete TPL</strong><br>Fascia: ' + f.properties.fascia + ' linee bus'); }
+                });
+            }
+        }
+        var layerTPL5 = null, tpl5Loaded = false;
+        function ensureTPL5Layer() {
+            if (tpl5Loaded) return; tpl5Loaded = true;
+            if (typeof dataReteTPL5 !== 'undefined') {
+                layerTPL5 = L.geoJSON(dataReteTPL5, {
+                    style: function(f) { return { color: tplBandColors[f.properties.fascia] || '#ff9800', weight: 3.5, opacity: 0.85, lineCap: 'round', lineJoin: 'round' }; },
+                    onEachFeature: function(f, layer) { layer.bindPopup('<strong>Rete TPL</strong><br>Fascia: ' + f.properties.fascia + ' linee bus'); }
+                });
+            }
+        }
+
+        // --- Strade Extraurbane helpers ---
+        function isPointInsideMunicipi(pt) {
+            if (mergedMunicipiBoundary) return turf.booleanPointInPolygon(pt, mergedMunicipiBoundary);
+            for (var i = 0; i < municipiPolygons.length; i++) {
+                if (turf.booleanPointInPolygon(pt, municipiPolygons[i])) return true;
+            }
+            return false;
+        }
+        function findBoundaryCrossing(a, b) {
+            try {
+                var seg = turf.lineString([a, b]);
+                if (mergedMunicipiBoundary) {
+                    var pts = turf.lineIntersect(seg, mergedMunicipiBoundary);
+                    if (pts.features.length > 0) return pts.features[0].geometry.coordinates;
+                }
+            } catch(e) {}
+            return null;
+        }
+        function filterStradeInsideMunicipi(geojson) {
+            if ((!mergedMunicipiBoundary && municipiPolygons.length === 0) || !geojson || !geojson.features) return geojson;
+            var outFeatures = [];
+            geojson.features.forEach(function(f) {
+                if (!f.geometry) return;
+                var coords = f.geometry.type === 'LineString' ? [f.geometry.coordinates] :
+                             f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : null;
+                if (!coords) return;
+                coords.forEach(function(line) {
+                    var cur = [];
+                    for (var i = 0; i < line.length; i++) {
+                        if (isPointInsideMunicipi(turf.point(line[i]))) {
+                            if (i > 0 && cur.length === 0) { var c = findBoundaryCrossing(line[i-1], line[i]); if (c) cur.push(c); }
+                            cur.push(line[i]);
+                        } else {
+                            if (cur.length > 0) {
+                                var c = findBoundaryCrossing(line[i-1], line[i]); if (c) cur.push(c);
+                                if (cur.length >= 2) outFeatures.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: cur } });
+                                cur = [];
+                            }
+                        }
+                    }
+                    if (cur.length >= 2) outFeatures.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: cur } });
+                });
+            });
+            return { type: 'FeatureCollection', features: outFeatures };
+        }
+
+        // --- Extraurbane Altri Enti ---
+        var layerExtraurbaneAltri = L.layerGroup();
+        var extraurbaneAltriLoaded = false;
+        function ensureExtraurbaneAltriLayer() {
+            if (extraurbaneAltriLoaded) return; extraurbaneAltriLoaded = true;
+            layerExtraurbaneAltri.clearLayers();
+            if (typeof json_StradeProvinciali !== 'undefined') {
+                var filtered = filterStradeInsideMunicipi(json_StradeProvinciali);
+                layerExtraurbaneAltri.addLayer(L.geoJSON(filtered, {
+                    style: function() { return { color: '#555555', weight: 2.5, opacity: 0.7, lineCap: 'round', lineJoin: 'round' }; },
+                    onEachFeature: function(feature, layer) {
+                        var p = feature.properties;
+                        var html = '<table class="popup-table">';
+                        html += '<tr><th colspan="2" style="font-size:13px;padding:6px 8px;background:#555555;color:white;">Strada Provinciale</th></tr>';
+                        if (p.name) html += popupRow('Nome', p.name);
+                        if (p.codice) html += popupRow('Codice', p.codice);
+                        html += '</table>';
+                        layer.bindPopup(html, { maxWidth: 340 });
+                    }
+                }));
+            }
+            // Add Autostrade (A) from Annesso D
+            if (typeof json_PGTUAnnessoD_5 !== 'undefined') {
+                (json_PGTUAnnessoD_5.features || []).forEach(function(f) {
+                    if ((f.properties.Classifica || '').toUpperCase() !== 'A') return;
+                    var gl = L.geoJSON(f.geometry, {
+                        style: function() { return { color: '#555555', weight: 3.5, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }; }
+                    });
+                    var name = f.properties.Toponomast || f.properties.Nome || 'Arco senza nome';
+                    gl.bindPopup('<div class="popup-title">' + name + '</div><span class="popup-layer-badge" style="background:#555;">Autostrada (da Annesso D)</span>', { maxWidth: 380 });
+                    layerExtraurbaneAltri.addLayer(gl);
+                });
+            }
+        }
+
+        // --- Extraurbane Comune di Roma (read-only from data_extraurbane.js) ---
+        var layerExtraurbane = L.layerGroup();
+        var extraurbaneLoaded = false;
+        function ensureExtraurbaneLayer() {
+            if (extraurbaneLoaded) return; extraurbaneLoaded = true;
+            if (typeof dataExtraurbane === 'undefined') return;
+            (dataExtraurbane.features || []).forEach(function(f) {
+                if (!f.geometry) return;
+                var p = f.properties;
+                var cl = p.Classifica || 'EX';
+                var color = classificaColors[cl] || '#8B4513';
+                var gl = L.geoJSON(f.geometry, {
+                    style: function() { return { color: color, weight: 3, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }; }
+                });
+                var cfName = classificaNames[cl] || cl;
+                var name = p.Toponomastica || p.Nome || 'Arco senza nome';
+                var html = '<div class="popup-title">' + name + '</div>';
+                html += '<span class="popup-layer-badge" style="background:#8B4513;">Extraurbana CdR</span>';
+                html += '<table class="popup-table">';
+                html += popupRow('Classificazione', cfName + ' (' + cl + ')');
+                html += popupRow('Ente', 'Comune di Roma');
+                if (p.Limiti) html += popupRow('Limiti', p.Limiti);
+                if (p.Municipio && p.Municipio !== '-') html += popupRow('Municipio', p.Municipio);
+                html += '</table>';
+                gl.bindPopup(html, { maxWidth: 380 });
+                layerExtraurbane.addLayer(gl);
+            });
+        }
+
+        // --- Centri Abitati ---
+        var layerCentriAbitati = null, centriAbitatiLoaded = false;
+        function ensureCentriAbitatiLayer() {
+            if (centriAbitatiLoaded) return; centriAbitatiLoaded = true;
+            if (typeof dataCentriAbitati !== 'undefined') {
+                layerCentriAbitati = L.geoJSON(dataCentriAbitati, {
+                    pane: 'backgroundPane',
+                    style: function() { return { color: '#4A0E4E', weight: 2, opacity: 0.8 }; }
+                });
+            }
+        }
+
+        // =====================================================
+        // LAYER TOGGLE HANDLERS
+        // =====================================================
+        function bringProposteFront() {
+            manualElimGroup.bringToFront();
+            manualInsGroup.bringToFront();
+            layerPiazzeLarghi.bringToFront();
+        }
+
+        document.getElementById('toggle-pgtu-black').addEventListener('change', function() {
+            if (this.checked) {
+                map.addLayer(layerPGTUBlack);
+                if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
+                bringProposteFront();
+                document.getElementById('legend-pgtu-black').style.display = '';
+            } else {
+                map.removeLayer(layerPGTUBlack);
+                document.getElementById('legend-pgtu-black').style.display = 'none';
+            }
+        });
+        document.getElementById('toggle-pgtu').addEventListener('change', function() {
+            if (this.checked) { map.addLayer(layerPGTU); document.getElementById('legend-pgtu').style.display = ''; bringProposteFront(); }
+            else { map.removeLayer(layerPGTU); document.getElementById('legend-pgtu').style.display = 'none'; }
+        });
+        document.getElementById('toggle-extraurbane-altri').addEventListener('change', function() {
+            if (this.checked) {
+                ensureExtraurbaneAltriLayer();
+                map.addLayer(layerExtraurbaneAltri);
+                if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
+                bringProposteFront();
+                document.getElementById('legend-extraurbane-altri').style.display = '';
+            } else {
+                map.removeLayer(layerExtraurbaneAltri);
+                document.getElementById('legend-extraurbane-altri').style.display = 'none';
+            }
+        });
+        document.getElementById('toggle-extraurbane-cdr').addEventListener('change', function() {
+            if (this.checked) {
+                ensureExtraurbaneLayer();
+                map.addLayer(layerExtraurbane);
+                if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
+                bringProposteFront();
+                document.getElementById('legend-extraurbane-cdr').style.display = '';
+            } else {
+                map.removeLayer(layerExtraurbane);
+                document.getElementById('legend-extraurbane-cdr').style.display = 'none';
+            }
+        });
+        document.getElementById('toggle-centri-abitati').addEventListener('change', function() {
+            if (this.checked) { ensureCentriAbitatiLayer(); if (layerCentriAbitati) map.addLayer(layerCentriAbitati); }
+            else { if (layerCentriAbitati) map.removeLayer(layerCentriAbitati); }
+        });
+        document.getElementById('toggle-grafo2026').addEventListener('change', function() {
+            if (this.checked) {
+                map.addLayer(layerGrafo2026);
+                layerGrafo2026.bringToFront();
+                document.getElementById('legend-grafo2026').style.display = '';
+            } else {
+                map.removeLayer(layerGrafo2026);
+                document.getElementById('legend-grafo2026').style.display = 'none';
+            }
+        });
+        document.getElementById('toggle-piazze-larghi').addEventListener('change', function() {
+            if (this.checked) { map.addLayer(layerPiazzeLarghi); layerPiazzeLarghi.bringToFront(); }
+            else { map.removeLayer(layerPiazzeLarghi); }
+        });
+        document.getElementById('toggle-low-traffic').addEventListener('change', function() {
+            if (this.checked) { map.addLayer(layerLowTraffic); document.getElementById('legend-low').style.display = ''; bringProposteFront(); }
+            else { map.removeLayer(layerLowTraffic); document.getElementById('legend-low').style.display = 'none'; }
+        });
+        document.getElementById('toggle-high-traffic').addEventListener('change', function() {
+            if (this.checked) { map.addLayer(layerHighTraffic); document.getElementById('legend-high').style.display = ''; bringProposteFront(); }
+            else { map.removeLayer(layerHighTraffic); document.getElementById('legend-high').style.display = 'none'; }
+        });
+        document.getElementById('toggle-atac').addEventListener('change', function() {
+            if (this.checked) { ensureATACLayer(); if (layerATAC) { map.addLayer(layerATAC); bringProposteFront(); } document.getElementById('legend-atac').style.display = ''; }
+            else { if (layerATAC) map.removeLayer(layerATAC); document.getElementById('legend-atac').style.display = 'none'; }
+        });
+        document.getElementById('toggle-tpl3').addEventListener('change', function() {
+            if (this.checked) { ensureTPL3Layer(); if (layerTPL3) { map.addLayer(layerTPL3); bringProposteFront(); } document.getElementById('legend-tpl3').style.display = ''; }
+            else { if (layerTPL3) map.removeLayer(layerTPL3); document.getElementById('legend-tpl3').style.display = 'none'; }
+        });
+        document.getElementById('toggle-tpl5').addEventListener('change', function() {
+            if (this.checked) { ensureTPL5Layer(); if (layerTPL5) { map.addLayer(layerTPL5); bringProposteFront(); } document.getElementById('legend-tpl5').style.display = ''; }
+            else { if (layerTPL5) map.removeLayer(layerTPL5); document.getElementById('legend-tpl5').style.display = 'none'; }
+        });
+        document.getElementById('toggle-proposte-elim').addEventListener('change', function() {
+            if (this.checked) { map.addLayer(manualElimGroup); document.getElementById('legend-proposte-elim').style.display = ''; }
+            else { map.removeLayer(manualElimGroup); document.getElementById('legend-proposte-elim').style.display = 'none'; }
+        });
+        document.getElementById('toggle-proposte-ins').addEventListener('change', function() {
+            if (this.checked) { map.addLayer(manualInsGroup); document.getElementById('legend-proposte-ins').style.display = ''; }
+            else { map.removeLayer(manualInsGroup); document.getElementById('legend-proposte-ins').style.display = 'none'; }
+        })
+        // =====================================================
+        // POPULATE MUNICIPI DROPDOWN
+        // =====================================================
+        var select = document.getElementById('municipio-select');
+        var municipi = [];
+        layerMunicipii.eachLayer(function(layer) {
+            var p = layer.feature.properties;
+            var label = p.Name || ('Municipio ' + (p.Attuale || p.Numero));
+            var numero = p.Numero || p.Attuale || '';
+            municipi.push({ label: label, numero: numero, layer: layer });
+        });
+        municipi.sort(function(a, b) { return parseInt(a.numero) - parseInt(b.numero); });
+        municipi.forEach(function(m) {
+            var opt = document.createElement('option');
+            opt.value = m.numero; opt.textContent = m.label;
+            select.appendChild(opt);
+        });
+        function getMunLabel(num) {
+            if (num === 'ND' || !num) return 'Non Assegnato';
+            for (var i = 0; i < municipi.length; i++) {
+                if (String(municipi[i].numero) === String(num)) return municipi[i].label;
+            }
+            return 'Municipio ' + num;
+        }
+
+        // =====================================================
+        // MUNICIPIO HIGHLIGHT + B&W MASK
+        // =====================================================
+        var selectedMunicipio = null;
+        var municipioHighlightGroup = L.layerGroup();
+
+        function getMunicipioPolygon(munNum) {
+            var poly = null;
+            layerMunicipii.eachLayer(function(layer) {
+                var num = layer.feature.properties.Numero || layer.feature.properties.Attuale || '';
+                if (String(num) === String(munNum)) poly = layer.toGeoJSON();
+            });
+            return poly;
+        }
+
+        function geometryIntersectsPoly(geometry, poly) {
+            if (!geometry || !poly) return false;
+            var coords = [];
+            function extract(geom) {
+                if (!geom) return;
+                if (geom.type === 'Point') { coords.push(geom.coordinates); return; }
+                if (geom.type === 'LineString') { geom.coordinates.forEach(function(c) { coords.push(c); }); return; }
+                if (geom.type === 'MultiLineString') { geom.coordinates.forEach(function(l) { l.forEach(function(c) { coords.push(c); }); }); return; }
+                if (geom.type === 'Polygon') { geom.coordinates[0].forEach(function(c) { coords.push(c); }); return; }
+                if (geom.type === 'MultiPolygon') { geom.coordinates.forEach(function(p) { p[0].forEach(function(c) { coords.push(c); }); }); return; }
+            }
+            extract(geometry);
+            var step = Math.max(1, Math.floor(coords.length / 10));
+            for (var i = 0; i < coords.length; i += step) {
+                if (turf.booleanPointInPolygon(turf.point(coords[i]), poly)) return true;
+            }
+            if (coords.length > 0 && turf.booleanPointInPolygon(turf.point(coords[coords.length - 1]), poly)) return true;
+            return false;
+        }
+
+        function clipLineToPolygon(coords, poly) {
+            var segments = [], current = [];
+            for (var i = 0; i < coords.length; i++) {
+                var inside = turf.booleanPointInPolygon(turf.point(coords[i]), poly);
+                if (inside) {
+                    if (current.length === 0 && i > 0) {
+                        var a = interpolateBorderPoint(coords[i-1], coords[i], poly);
+                        if (a) current.push(a);
+                    }
+                    current.push(coords[i]);
+                } else {
+                    if (current.length > 0) {
+                        var a = interpolateBorderPoint(coords[i], coords[i-1], poly);
+                        if (a) current.push(a);
+                        if (current.length >= 2) segments.push(current);
+                        current = [];
+                    }
+                }
+            }
+            if (current.length >= 2) segments.push(current);
+            return segments;
+        }
+        function interpolateBorderPoint(outsidePt, insidePt, poly) {
+            var ax = outsidePt[0], ay = outsidePt[1], bx = insidePt[0], by = insidePt[1];
+            for (var j = 0; j < 5; j++) {
+                var mx = (ax+bx)/2, my = (ay+by)/2;
+                if (turf.booleanPointInPolygon(turf.point([mx,my]), poly)) { bx=mx; by=my; } else { ax=mx; ay=my; }
+            }
+            return [(ax+bx)/2, (ay+by)/2];
+        }
+
+        function updateMunicipioHighlight(munNum) {
+            municipioHighlightGroup.clearLayers();
+            if (!munNum) { if (map.hasLayer(municipioHighlightGroup)) map.removeLayer(municipioHighlightGroup); return; }
+            var poly = getMunicipioPolygon(munNum);
+            if (!poly) return;
+            try { poly = turf.buffer(poly, 0.05, { units: 'kilometers' }) || poly; } catch(e) {}
+
+            function cloneIntersecting(sourceLayer) {
+                if (!sourceLayer || !map.hasLayer(sourceLayer)) return;
+                var iterate = function(layer) {
+                    if (layer instanceof L.CircleMarker && !(layer instanceof L.Circle)) {
+                        var ll = layer.getLatLng();
+                        if (turf.booleanPointInPolygon(turf.point([ll.lng, ll.lat]), poly)) {
+                            var o = layer.options || {};
+                            municipioHighlightGroup.addLayer(L.circleMarker([ll.lat, ll.lng], {
+                                radius: o.radius||6, color: o.color||'#888', fillColor: o.fillColor||o.color||'#888',
+                                fillOpacity: o.fillOpacity||0.7, weight: o.weight||2, opacity: o.opacity||1,
+                                pane: 'highlightPane', interactive: false
+                            }));
+                        }
+                        return;
+                    }
+                    if (layer.feature && layer.feature.geometry) {
+                        if (geometryIntersectsPoly(layer.feature.geometry, poly)) {
+                            var o = layer.options || {};
+                            var style = {
+                                color: o.color||'#888', weight: o.weight||3, opacity: o.opacity||1,
+                                dashArray: o.dashArray||null, lineCap: o.lineCap||'round', lineJoin: o.lineJoin||'round',
+                                pane: 'highlightPane', interactive: false
+                            };
+                            var gt = layer.feature.geometry.type;
+                            if (gt === 'LineString') {
+                                clipLineToPolygon(layer.feature.geometry.coordinates, poly).forEach(function(seg) {
+                                    municipioHighlightGroup.addLayer(L.geoJSON({ type:'Feature', geometry:{ type:'LineString', coordinates:seg }, properties:{} }, { style: function(){return style;} }));
+                                });
+                            } else if (gt === 'MultiLineString') {
+                                layer.feature.geometry.coordinates.forEach(function(line) {
+                                    clipLineToPolygon(line, poly).forEach(function(seg) {
+                                        municipioHighlightGroup.addLayer(L.geoJSON({ type:'Feature', geometry:{ type:'LineString', coordinates:seg }, properties:{} }, { style: function(){return style;} }));
+                                    });
+                                });
+                            } else {
+                                municipioHighlightGroup.addLayer(L.geoJSON(layer.feature, { style: function(){return style;} }));
+                            }
+                        }
+                    }
+                };
+                if (typeof sourceLayer.eachLayer === 'function') {
+                    sourceLayer.eachLayer(function(sub) {
+                        if (typeof sub.eachLayer === 'function') sub.eachLayer(iterate);
+                        else iterate(sub);
+                    });
+                }
+            }
+
+            cloneIntersecting(layerPGTU);
+            cloneIntersecting(layerPGTUBlack);
+            cloneIntersecting(layerLowTraffic);
+            cloneIntersecting(layerHighTraffic);
+            cloneIntersecting(layerExtraurbaneAltri);
+            cloneIntersecting(layerExtraurbane);
+            if (layerATAC) cloneIntersecting(layerATAC);
+            if (layerTPL3) cloneIntersecting(layerTPL3);
+            if (layerTPL5) cloneIntersecting(layerTPL5);
+            cloneIntersecting(layerGrafo2026);
+            cloneIntersecting(manualElimGroup);
+            cloneIntersecting(manualInsGroup);
+            cloneIntersecting(layerPiazzeLarghi);
+
+            if (!map.hasLayer(municipioHighlightGroup)) map.addLayer(municipioHighlightGroup);
+        }
+
+        function setOverlayGrayscale(on) {
+            var overlayPane = map.getPane('overlayPane');
+            var bgPane = map.getPane('backgroundPane');
+            if (on) { overlayPane.style.filter = 'grayscale(1) opacity(0.35)'; bgPane.style.filter = 'grayscale(1) opacity(0.35)'; }
+            else { overlayPane.style.filter = ''; bgPane.style.filter = ''; }
+        }
+
+        function updateBWMask(munNum) {
+            if (bwMaskLayer) { map.removeLayer(bwMaskLayer); bwMaskLayer = null; }
+            if (!munNum) return;
+            var munLayer = null;
+            layerMunicipii.eachLayer(function(l) {
+                var num = l.feature.properties.Numero || l.feature.properties.Attuale || '';
+                if (String(num) === String(munNum)) munLayer = l;
+            });
+            if (!munLayer) return;
+            var worldRing = [[-90,-180],[-90,180],[90,180],[90,-180],[-90,-180]];
+            var buffered = null;
+            try { buffered = turf.buffer(munLayer.toGeoJSON(), 0.05, { units: 'kilometers' }); } catch(e) {}
+            var geom = buffered ? buffered.geometry : munLayer.feature.geometry;
+            var holes = [];
+            if (geom.type === 'Polygon') {
+                holes = geom.coordinates.map(function(ring) { return ring.map(function(c) { return [c[1],c[0]]; }); });
+            } else if (geom.type === 'MultiPolygon') {
+                geom.coordinates.forEach(function(poly) { poly.forEach(function(ring) { holes.push(ring.map(function(c) { return [c[1],c[0]]; })); }); });
+            }
+            var latlngs = [worldRing.map(function(c) { return [c[0],c[1]]; })];
+            holes.forEach(function(h) { latlngs.push(h); });
+            bwMaskLayer = L.polygon(latlngs, { pane: 'maskPane', fillColor: '#ffffff', fillOpacity: 0.65, stroke: false, interactive: false }).addTo(map);
+        }
+
+        select.addEventListener('change', function() {
+            selectedMunicipio = this.value;
+            layerMunicipii.eachLayer(function(layer) {
+                var num = layer.feature.properties.Numero || layer.feature.properties.Attuale || '';
+                if (!selectedMunicipio) layer.setStyle(defaultMunicipiStyle);
+                else if (String(num) === String(selectedMunicipio)) { layer.setStyle(highlightMunicipiStyle); layer.bringToFront(); }
+                else layer.setStyle(dimmedMunicipiStyle);
+            });
+            if (selectedMunicipio) {
+                setOverlayGrayscale(true);
+                updateBWMask(selectedMunicipio);
+                updateMunicipioHighlight(selectedMunicipio);
+                // Zoom to municipio
+                layerMunicipii.eachLayer(function(layer) {
+                    var num = layer.feature.properties.Numero || layer.feature.properties.Attuale || '';
+                    if (String(num) === String(selectedMunicipio)) map.fitBounds(layer.getBounds(), { padding: [30,30] });
+                });
+            } else {
+                setOverlayGrayscale(false);
+                updateBWMask(null);
+                updateMunicipioHighlight(null);
+                try { map.fitBounds(layerMunicipii.getBounds(), { padding: [20,20] }); } catch(e) {}
+            }
+        });
+
+        // =====================================================
+        // ROAD SEARCH (with OSM Nominatim)
+        // =====================================================
+        var searchInput = document.getElementById('road-search');
+        var searchResults = document.getElementById('search-results');
+        var searchIndex = [];
+
+        function buildSearchIndex() {
+            searchIndex = [];
+            layerPGTU.eachLayer(function(layer) {
+                var name = layer.feature.properties.Toponomast || layer.feature.properties.Nome || '';
+                if (name) searchIndex.push({ name: name, type: 'PGTU', layer: layer });
+            });
+            layerLowTraffic.eachLayer(function(layer) {
+                var p = layer.feature.properties;
+                var name = p['Nome Strad'] || p.Toponom || p.Toponomast || '';
+                if (name) searchIndex.push({ name: name, type: 'Flussi Bassi', layer: layer });
+            });
+            layerHighTraffic.eachLayer(function(layer) {
+                var p = layer.feature.properties;
+                var name = p['Nome Strada'] || p.Toponomastica || p.Toponom || '';
+                if (name) searchIndex.push({ name: name, type: 'Flussi Elevati', layer: layer });
+            });
+            // Grafo 2026 features
+            layerGrafo2026.eachLayer(function(sub) {
+                if (typeof sub.eachLayer === 'function') {
+                    sub.eachLayer(function(layer) {
+                        if (layer.feature) {
+                            var name = layer.feature.properties.nome || '';
+                            if (name) searchIndex.push({ name: name, type: 'Grafo 2026', layer: layer });
+                        }
+                    });
+                }
+            });
+            // Proposte
+            function addGroupSearch(group, typeName) {
+                group.eachLayer(function(sub) {
+                    if (sub instanceof L.CircleMarker) return; // skip point markers
+                    if (typeof sub.eachLayer === 'function') {
+                        sub.eachLayer(function(layer) {
+                            if (layer.feature) {
+                                var name = layer.feature.properties.nome || '';
+                                if (name) searchIndex.push({ name: name, type: typeName, layer: layer });
+                            }
+                        });
+                    }
+                });
+            }
+            addGroupSearch(manualElimGroup, 'Eliminazione');
+            addGroupSearch(manualInsGroup, 'Inserimento');
+            // Deduplicate
+            var seen = {};
+            searchIndex = searchIndex.filter(function(item) {
+                var key = item.name + '||' + item.type;
+                if (seen[key]) return false;
+                seen[key] = true;
+                return true;
+            });
+        }
+        // Build initial index (PGTU + Flussi available now; Grafo/Proposte added after fetch)
+        buildSearchIndex();
+
+        var searchTimeout, nominatimTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout); clearTimeout(nominatimTimeout);
+            var query = this.value.trim().toLowerCase();
+            if (query.length < 2) { searchResults.style.display = 'none'; return; }
+            searchTimeout = setTimeout(function() {
+                var matches = [];
+                for (var i = 0; i < searchIndex.length && matches.length < 20; i++) {
+                    if (searchIndex[i].name.toLowerCase().indexOf(query) !== -1) matches.push(searchIndex[i]);
+                }
+                var html = '';
+                if (matches.length > 0) {
+                    html += '<div class="search-separator">Risultati locali</div>';
+                    matches.forEach(function(m) {
+                        html += '<div class="search-result-item" data-idx="' + searchIndex.indexOf(m) + '">';
+                        html += m.name + '<span class="result-type">' + m.type + '</span></div>';
+                    });
+                }
+                searchResults.innerHTML = html;
+                if (html) searchResults.style.display = 'block';
+                // Nominatim OSM search
+                if (query.length >= 3) {
+                    clearTimeout(nominatimTimeout);
+                    nominatimTimeout = setTimeout(function() {
+                        fetch('https://nominatim.openstreetmap.org/search?format=json&q=' +
+                            encodeURIComponent(query + ', Roma') +
+                            '&viewbox=12.23,42.05,12.86,41.65&bounded=1&limit=8&addressdetails=1',
+                            { headers: { 'Accept-Language': 'it' } })
+                        .then(function(r) { return r.json(); })
+                        .then(function(results) {
+                            if (results && results.length > 0) {
+                                var osmHtml = '<div class="search-separator">Risultati OpenStreetMap</div>';
+                                results.forEach(function(r) {
+                                    osmHtml += '<div class="search-result-item" data-osm-lat="' + r.lat +
+                                        '" data-osm-lon="' + r.lon + '" data-osm-name="' +
+                                        (r.display_name||'').replace(/"/g,'&quot;') + '">';
+                                    osmHtml += '<span>' + r.display_name + '</span>';
+                                    osmHtml += '<span class="result-source">OSM</span></div>';
+                                });
+                                searchResults.innerHTML += osmHtml;
+                                searchResults.style.display = 'block';
+                            }
+                        }).catch(function(){});
+                    }, 500);
+                }
+            }, 150);
+        });
+
+        searchResults.addEventListener('click', function(e) {
+            var item = e.target.closest('.search-result-item');
+            if (!item) return;
+            var osmLat = item.getAttribute('data-osm-lat');
+            var osmLon = item.getAttribute('data-osm-lon');
+            if (osmLat && osmLon) {
+                map.setView([parseFloat(osmLat), parseFloat(osmLon)], 16);
+                L.popup().setLatLng([parseFloat(osmLat), parseFloat(osmLon)])
+                    .setContent('<div class="popup-title">' + (item.getAttribute('data-osm-name') || 'Posizione OSM') + '</div>')
+                    .openOn(map);
+                searchResults.style.display = 'none';
+                searchInput.value = item.getAttribute('data-osm-name') || '';
+                return;
+            }
+            var idx = parseInt(item.getAttribute('data-idx'));
+            var match = searchIndex[idx];
+            if (match && match.layer) {
+                var bounds = match.layer.getBounds ? match.layer.getBounds() : null;
+                if (bounds) map.fitBounds(bounds, { maxZoom: 16, padding: [40,40] });
+                else if (match.layer.getLatLng) map.setView(match.layer.getLatLng(), 16);
+                match.layer.openPopup();
+                // Flash highlight
+                if (match.layer.setStyle) {
+                    match.layer.setStyle({ color: '#ff00ff', weight: 8, opacity: 1 });
+                    var origType = match.type;
+                    var origLayer = match.layer;
+                    setTimeout(function() {
+                        if (origType === 'PGTU') origLayer.setStyle(stylePGTU(origLayer.feature));
+                        else if (origType === 'Flussi Bassi') origLayer.setStyle(styleLowTraffic(origLayer.feature));
+                        else if (origType === 'Flussi Elevati') origLayer.setStyle(styleHighTraffic(origLayer.feature));
+                        else origLayer.setStyle({ color: '#888', weight: 3, opacity: 1 });
+                    }, 2000);
+                }
+            }
+            searchResults.style.display = 'none';
+            searchInput.value = match ? match.name : '';
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-container')) searchResults.style.display = 'none';
+        });
+
+        // =====================================================
+        // DISTANCE MEASUREMENT TOOL
+        // =====================================================
+        var MeasureControl = L.Control.extend({
+            options: { position: 'topleft' },
+            onAdd: function() {
+                var container = L.DomUtil.create('div', 'leaflet-measure-control leaflet-bar');
+                container.innerHTML = '&#x1F4CF;';
+                container.title = 'Misura distanza';
+                L.DomEvent.disableClickPropagation(container);
+                container.addEventListener('click', function() { toggleMeasure(); });
+                return container;
+            }
+        });
+        map.addControl(new MeasureControl());
+
+        var measuring = false, measurePoints = [], measureMarkers = [], measureLines = [], measureTooltips = [];
+        function toggleMeasure() {
+            measuring = !measuring;
+            var btn = document.querySelector('.leaflet-measure-control');
+            if (measuring) { btn.classList.add('active'); map.getContainer().style.cursor = 'crosshair'; map.on('click', onMeasureClick); }
+            else { btn.classList.remove('active'); map.getContainer().style.cursor = ''; map.off('click', onMeasureClick); clearMeasure(); }
+        }
+        function clearMeasure() {
+            measureMarkers.forEach(function(m) { map.removeLayer(m); });
+            measureLines.forEach(function(l) { map.removeLayer(l); });
+            measureTooltips.forEach(function(t) { map.removeLayer(t); });
+            measurePoints = []; measureMarkers = []; measureLines = []; measureTooltips = [];
+        }
+        function formatDist(meters) { return meters >= 1000 ? (meters/1000).toFixed(2) + ' km' : Math.round(meters) + ' m'; }
+        function onMeasureClick(e) {
+            measurePoints.push(e.latlng);
+            measureMarkers.push(L.circleMarker(e.latlng, { radius: 5, color: '#0079ff', fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(map));
+            if (measurePoints.length > 1) {
+                var prev = measurePoints[measurePoints.length - 2], curr = measurePoints[measurePoints.length - 1];
+                measureLines.push(L.polyline([prev, curr], { color: '#0079ff', weight: 3, dashArray: '8,6', opacity: 0.9 }).addTo(map));
+                var segDist = prev.distanceTo(curr);
+                var totalDist = 0;
+                for (var i = 1; i < measurePoints.length; i++) totalDist += measurePoints[i-1].distanceTo(measurePoints[i]);
+                var mid = L.latLng((prev.lat+curr.lat)/2, (prev.lng+curr.lng)/2);
+                var tip = L.tooltip({ permanent: true, direction: 'top', className: 'measure-tooltip', offset: [0, -8] })
+                    .setLatLng(mid).setContent(formatDist(segDist) + (measurePoints.length > 2 ? ' (tot: ' + formatDist(totalDist) + ')' : '')).addTo(map);
+                measureTooltips.push(tip);
+            }
+        }
+
+        // Loading is hidden after fetch completes (see Promise.all above)
+
+    })();
+    </script>
+</body>
+</html>

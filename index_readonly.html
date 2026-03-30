@@ -701,19 +701,26 @@
                 var gl = L.geoJSON(f.geometry, {
                     style: function() { return { color: '#555555', weight: weight, opacity: opacity, lineCap: 'round', lineJoin: 'round' }; }
                 });
-                var name = p.Toponomast || p.Nome || p.name || 'Arco senza nome';
+                var name = p.Toponomast || p.Nome || p.name || p.nome || 'Arco senza nome';
+                var classifica = p.Classifica || p.classifica || '';
                 var badgeLabel = isAutostrada ? 'Autostrada' : (isProvinciale ? 'Strada Provinciale' : 'Extraurbana Altri Enti');
                 var html = '<div class="popup-title">' + name + '</div>';
                 html += '<span class="popup-layer-badge" style="background:#555555;">' + badgeLabel + '</span>';
                 html += '<table class="popup-table">';
                 html += '<tr><th colspan="2" style="font-size:13px;padding:6px 8px;background:#555555;color:white;">' + badgeLabel + '</th></tr>';
-                if (p.Classifica) html += popupRow('Classificazione', p.Classifica);
+                if (classifica) html += popupRow('Classificazione', classifica);
                 if (p.codice) html += popupRow('Codice', p.codice);
-                if (p.Limiti && p.Limiti !== '-') html += popupRow('Limiti', p.Limiti);
-                if (p.Municipio && p.Municipio !== '-') html += popupRow('Municipio', p.Municipio);
+                if (p.ente_competente) html += popupRow('Ente', p.ente_competente);
+                var limiti = p.Limiti || p.limiti || '';
+                if (limiti && limiti !== '-') html += popupRow('Limiti', limiti);
+                var mun = p.Municipio || p.municipio || '';
+                if (mun && mun !== '-') html += popupRow('Municipio', mun);
                 if (p.Grande_Via && p.Grande_Via !== 'No') html += popupRow('Grande Viabilità', p.Grande_Via);
-                if (p.TPL && p.TPL !== 'No') html += popupRow('TPL', p.TPL);
-                if (p.Note_2025 && p.Note_2025 !== '-') html += popupRow('Note', p.Note_2025);
+                if (p.grande_viabilita && p.grande_viabilita !== 'No') html += popupRow('Grande Viabilità', p.grande_viabilita);
+                var tpl = p.TPL || p.tpl || '';
+                if (tpl && tpl !== 'No') html += popupRow('TPL', tpl);
+                var note = p.Note_2025 || p.note || '';
+                if (note && note !== '-') html += popupRow('Note', note);
                 html += popupRow('Fonte', fonte);
                 html += '</table>';
                 gl.bindPopup(html, { maxWidth: 380 });

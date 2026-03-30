@@ -285,6 +285,8 @@
     <script src="data/FlussiTomTomflussi_tomtom_3.js"></script>
     <script src="data/FlussiTomTomflussi_tomtom_2.js"></script>
     <script src="data/LineeATAC_4.js"></script>
+    <script src="data/grafo2026_data.js"></script>
+    <script src="data/proposte2026_data.js"></script>
     <script src="data_strade_provinciali.js"></script>
     <script src="data_extraurbane.js"></script>
     <script src="data_centri_abitati.js"></script>
@@ -484,8 +486,7 @@
         // =====================================================
         // FETCH & RENDER: Grafo 2026 + Proposte (from static geojson)
         // =====================================================
-        var grafo2026Data = null;
-        var proposteData = null;
+        // grafo2026Data and proposteData loaded via <script> tags
 
         function renderGrafo2026(geojson) {
             layerGrafo2026.clearLayers();
@@ -578,35 +579,11 @@
             });
         }
 
-        // Fetch both geojson files
-        function fetchJSON(url) {
-            return fetch(url).then(function(r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status + ' per ' + url);
-                return r.json();
-            });
-        }
-        Promise.all([
-            fetchJSON('PGTU_Grafo_2026.geojson'),
-            fetchJSON('pgtu_proposte_2026-03-26.geojson')
-        ]).then(function(results) {
-            grafo2026Data = results[0];
-            proposteData = results[1];
-            renderGrafo2026(grafo2026Data);
-            renderProposte(proposteData);
-            if (typeof buildSearchIndex === 'function') buildSearchIndex();
-            document.getElementById('loading').style.display = 'none';
-        }).catch(function(err) {
-            console.error('Errore caricamento dati:', err);
-            var msg = 'Errore nel caricamento dei dati GeoJSON.';
-            if (window.location.protocol === 'file:') {
-                msg += '<br><br>Stai aprendo il file direttamente dal disco (file://). '
-                     + 'Per funzionare, serve un web server locale.<br>'
-                     + 'Apri un terminale nella cartella del progetto e lancia:<br>'
-                     + '<code>python3 -m http.server 8080</code><br>'
-                     + 'poi apri <a href="http://localhost:8080/index_readonly.html">http://localhost:8080/index_readonly.html</a>';
-            }
-            document.getElementById('loading').innerHTML = '<p style="color:#c00;font-size:14px;">' + msg + '</p>';
-        });
+        // Render data loaded via <script> tags
+        renderGrafo2026(grafo2026Data);
+        renderProposte(proposteData);
+        if (typeof buildSearchIndex === 'function') buildSearchIndex();
+        document.getElementById('loading').style.display = 'none';
         // =====================================================
         // LAZY LAYERS (loaded on demand)
         // =====================================================

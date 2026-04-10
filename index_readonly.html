@@ -772,7 +772,13 @@
         // =====================================================
         // LAYER TOGGLE HANDLERS
         // =====================================================
-        function bringProposteFront() {
+        function bringLayersToOrder() {
+            // Order (bottom to top): CdR -> Grafo2026/PGTU -> Altri Enti -> Proposte
+            if (map.hasLayer(layerExtraurbane)) layerExtraurbane.bringToFront();
+            if (map.hasLayer(layerPGTUBlack)) layerPGTUBlack.bringToFront();
+            if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
+            if (map.hasLayer(layerGrafo2026)) layerGrafo2026.bringToFront();
+            if (map.hasLayer(layerExtraurbaneAltri)) layerExtraurbaneAltri.bringToFront();
             manualElimGroup.bringToFront();
             manualInsGroup.bringToFront();
             layerPiazzeLarghi.bringToFront();
@@ -781,8 +787,7 @@
         document.getElementById('toggle-pgtu-black').addEventListener('change', function() {
             if (this.checked) {
                 map.addLayer(layerPGTUBlack);
-                if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
-                bringProposteFront();
+                bringLayersToOrder();
                 document.getElementById('legend-pgtu-black').style.display = '';
             } else {
                 map.removeLayer(layerPGTUBlack);
@@ -790,15 +795,14 @@
             }
         });
         document.getElementById('toggle-pgtu').addEventListener('change', function() {
-            if (this.checked) { map.addLayer(layerPGTU); document.getElementById('legend-pgtu').style.display = ''; bringProposteFront(); }
+            if (this.checked) { map.addLayer(layerPGTU); bringLayersToOrder(); document.getElementById('legend-pgtu').style.display = ''; }
             else { map.removeLayer(layerPGTU); document.getElementById('legend-pgtu').style.display = 'none'; }
         });
         document.getElementById('toggle-extraurbane-altri').addEventListener('change', function() {
             if (this.checked) {
                 ensureExtraurbaneAltriLayer();
                 map.addLayer(layerExtraurbaneAltri);
-                if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
-                bringProposteFront();
+                bringLayersToOrder();
                 document.getElementById('legend-extraurbane-altri').style.display = '';
             } else {
                 map.removeLayer(layerExtraurbaneAltri);
@@ -809,8 +813,7 @@
             if (this.checked) {
                 ensureExtraurbaneLayer();
                 map.addLayer(layerExtraurbane);
-                if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
-                bringProposteFront();
+                bringLayersToOrder();
                 document.getElementById('legend-extraurbane-cdr').style.display = '';
             } else {
                 map.removeLayer(layerExtraurbane);
@@ -824,7 +827,7 @@
         document.getElementById('toggle-grafo2026').addEventListener('change', function() {
             if (this.checked) {
                 map.addLayer(layerGrafo2026);
-                layerGrafo2026.bringToFront();
+                bringLayersToOrder();
                 document.getElementById('legend-grafo2026').style.display = '';
             } else {
                 map.removeLayer(layerGrafo2026);
@@ -836,15 +839,15 @@
             else { map.removeLayer(layerPiazzeLarghi); }
         });
         document.getElementById('toggle-low-traffic').addEventListener('change', function() {
-            if (this.checked) { map.addLayer(layerLowTraffic); document.getElementById('legend-low').style.display = ''; bringProposteFront(); }
+            if (this.checked) { map.addLayer(layerLowTraffic); document.getElementById('legend-low').style.display = ''; bringLayersToOrder(); }
             else { map.removeLayer(layerLowTraffic); document.getElementById('legend-low').style.display = 'none'; }
         });
         document.getElementById('toggle-high-traffic').addEventListener('change', function() {
-            if (this.checked) { map.addLayer(layerHighTraffic); document.getElementById('legend-high').style.display = ''; bringProposteFront(); }
+            if (this.checked) { map.addLayer(layerHighTraffic); document.getElementById('legend-high').style.display = ''; bringLayersToOrder(); }
             else { map.removeLayer(layerHighTraffic); document.getElementById('legend-high').style.display = 'none'; }
         });
         document.getElementById('toggle-atac').addEventListener('change', function() {
-            if (this.checked) { ensureATACLayer(); if (layerATAC) { map.addLayer(layerATAC); bringProposteFront(); } document.getElementById('legend-atac').style.display = ''; }
+            if (this.checked) { ensureATACLayer(); if (layerATAC) { map.addLayer(layerATAC); bringLayersToOrder(); } document.getElementById('legend-atac').style.display = ''; }
             else { if (layerATAC) map.removeLayer(layerATAC); document.getElementById('legend-atac').style.display = 'none'; }
         });
         document.getElementById('toggle-tpl3').addEventListener('change', function() {

@@ -562,7 +562,6 @@
         // Render data loaded via <script> tags
         renderGrafo2026(grafo2026Data);
         renderProposte(proposteData);
-        if (typeof bringLayersToOrder === 'function') bringLayersToOrder();
         if (typeof buildSearchIndex === 'function') buildSearchIndex();
         document.getElementById('loading').style.display = 'none';
         // =====================================================
@@ -754,14 +753,14 @@
         // =====================================================
         function bringLayersToOrder() {
             // Order (bottom to top): CdR -> Grafo2026/PGTU -> Altri Enti -> Proposte
-            if (map.hasLayer(layerExtraurbane)) layerExtraurbane.bringToFront();
-            if (map.hasLayer(layerPGTUBlack)) layerPGTUBlack.bringToFront();
-            if (map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
-            if (map.hasLayer(layerGrafo2026)) layerGrafo2026.bringToFront();
-            if (map.hasLayer(layerExtraurbaneAltri)) layerExtraurbaneAltri.bringToFront();
-            manualElimGroup.bringToFront();
-            manualInsGroup.bringToFront();
-            layerPiazzeLarghi.bringToFront();
+            if (typeof layerExtraurbane !== 'undefined' && map.hasLayer(layerExtraurbane)) layerExtraurbane.bringToFront();
+            if (typeof layerPGTUBlack !== 'undefined' && map.hasLayer(layerPGTUBlack)) layerPGTUBlack.bringToFront();
+            if (typeof layerPGTU !== 'undefined' && map.hasLayer(layerPGTU)) layerPGTU.bringToFront();
+            if (typeof layerGrafo2026 !== 'undefined' && map.hasLayer(layerGrafo2026)) layerGrafo2026.bringToFront();
+            if (typeof layerExtraurbaneAltri !== 'undefined' && map.hasLayer(layerExtraurbaneAltri)) layerExtraurbaneAltri.bringToFront();
+            if (typeof manualElimGroup !== 'undefined' && map.hasLayer(manualElimGroup)) manualElimGroup.bringToFront();
+            if (typeof manualInsGroup !== 'undefined' && map.hasLayer(manualInsGroup)) manualInsGroup.bringToFront();
+            if (typeof layerPiazzeLarghi !== 'undefined' && map.hasLayer(layerPiazzeLarghi)) layerPiazzeLarghi.bringToFront();
         }
 
         document.getElementById('toggle-pgtu-black').addEventListener('change', function() {
